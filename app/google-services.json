@@ -1,0 +1,69 @@
+{
+  "project_info": {
+    "project_number": "816511459439",
+    "firebase_url": "https://yooncafe-8c8b5.firebaseio.com",
+    "project_id": "yooncafe-8c8b5",
+    "storage_bucket": "yooncafe-8c8b5.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816511459439:android:857a60d73c8508fed32d9a",
+        "android_client_info": {
+          "package_name": "com.example.cafe"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "816511459439-36dh9k9n2rv7lqc1gcs30pklralgqeh0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqCZmHrH987VqydFBRYfQCjNTxGe0at-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "816511459439-36dh9k9n2rv7lqc1gcs30pklralgqeh0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816511459439:android:969e4a5574a64696d32d9a",
+        "android_client_info": {
+          "package_name": "com.yooncafe.cafe"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "816511459439-36dh9k9n2rv7lqc1gcs30pklralgqeh0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCqCZmHrH987VqydFBRYfQCjNTxGe0at-g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "816511459439-36dh9k9n2rv7lqc1gcs30pklralgqeh0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

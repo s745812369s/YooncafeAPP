@@ -1,0 +1,499 @@
+package com.yooncafe.cafe;
+
+import android.content.Context;
+import android.content.Intent;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.util.Log;
+
+import android.widget.Toast;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.SetOptions;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+
+public class QRActivity extends AppCompatActivity {
+    private FirebaseAuth firebaseAuth;
+    private IntentIntegrator qrScan;
+    private AlertDialog dialog;
+    public static Context context_main;
+    public String cafeName;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        firebaseAuth = FirebaseAuth.getInstance();
+        context_main = this;
+        qrScan = new IntentIntegrator(this);
+        qrScan.setOrientationLocked(false); // default가 세로모드인데 휴대폰 방향에 따라 가로, 세로로 자동 변경됩니다.
+        qrScan.setPrompt("Sample Text!");
+        qrScan.initiateScan();
+    }
+
+    //시간 get
+    long now = System.currentTimeMillis();
+    Date mDate = new Date(now);
+    SimpleDateFormat simpleDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    String getTime = simpleDate.format(mDate);
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if(result != null) {
+            if(result.getContents() == null) {
+                Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                startActivity(intent);
+            } else {
+                String result_text = result.getContents();
+                if(result_text.contains("yooncafeyooncafe3x3x3x3x3")) {//yooncafeyooncafe3x3x3x3x3-456456-cafename(코드 형식)
+                    Toast.makeText(this, "Scanned: " + result.getContents(), Toast.LENGTH_LONG).show();
+                    cafeName = result_text.substring(33);
+                    final String cafeCode = result_text.substring(26,32);
+                    final String userLog = getTime;
+
+                    FirebaseUser user = firebaseAuth.getCurrentUser();
+                    final String uid = user.getUid();
+                    final FirebaseFirestore storage = FirebaseFirestore.getInstance();
+
+                    final HashMap<Object, Object> nestedmap = new HashMap<>();
+                    nestedmap.put("cafeCode",cafeCode);
+                    nestedmap.put("useNum",1);
+                    nestedmap.put("Log 1",userLog);
+
+                    final HashMap<Object, Object> nestedmap2 = new HashMap<>();
+                    nestedmap2.put(cafeCode,1);
+
+                    final DocumentReference userLogPath = storage.collection("Users").document(uid)
+                            .collection(cafeName).document(cafeCode);
+                    final boolean[] defaultCol = {false};
+                    storage.collection("Users").document(uid).collection(cafeName)
+                            .get()
+                            .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+                             @Override
+                            public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                                if (task.isSuccessful()) {
+                                    if(!task.getResult().isEmpty()) {
+                                        defaultCol[0] = true;
+                                    } else {
+                                        defaultCol[0] = false;
+                                        userLogPath.set(nestedmap);
+                                        storage.collection("Users").document(uid).set(nestedmap2,SetOptions.merge());
+                                        storage.collection("Users").document(uid).update("useCafeNum",FieldValue.increment(1));
+                                        Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                                        startActivity(intent);
+                                        finish();
+                                    }
+                                } else {
+                                    Log.d("d", "Error getting documents: ", task.getException());
+                                }
+                            }
+                    });
+                    final int[] SaveduserNum = new int[1];
+                    userLogPath.get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+                        @Override
+                        public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                            if (task.isSuccessful()) {
+                                DocumentSnapshot document = task.getResult();
+                                if (document.exists()) {
+                                    if(defaultCol[0]){
+                                        String temp = document.get("useNum").toString();
+                                        if (!TextUtils.isEmpty(temp) && TextUtils.isDigitsOnly(temp)) {
+                                            SaveduserNum[0] = Integer.parseInt(temp);
+                                            SaveduserNum[0] = SaveduserNum[0]+1;
+                                        }
+                                        final HashMap<Object, Object> map2 = new HashMap<>();
+                                        map2.put("Log "+ SaveduserNum[0],userLog);
+                                        userLogPath.update("useNum", FieldValue.increment(1));
+                                        userLogPath.set(map2, SetOptions.merge());
+                                        storage.collection("Users").document(uid).update(cafeCode,FieldValue.increment(1));
+                                        Intent intent = new Intent(QRActivity.this, CouponActivity.class);
+                                        startActivity(intent);
+                                        finish();
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                else{
+                    Toast.makeText(this, "유효하지 않은 QR 입니다.", Toast.LENGTH_LONG).show();
+                    Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                    startActivity(intent);
+                }
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+}
+//////////////////////////////////////////////////////////////////////////
+///////////////////////
+package com.yooncafe.cafe;
+import android.content.Intent;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import android.util.Log;
+import android.view.View;
+import java.util.ArrayList;
+import java.util.List;
+
+public class MainActivity extends AppCompatActivity {
+    private FirebaseAuth firebaseAuth =  FirebaseAuth.getInstance();
+    FirebaseFirestore storage;
+    FirebaseUser user = firebaseAuth.getCurrentUser();
+    final String uid = user.getUid();
+    final DocumentReference userLogPath = storage.collection("Users").document(uid);
+    int ITEM_SIZE = 0;
+    public String cafeCode;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        setUpRecyclerView();
+        storage = FirebaseFirestore.getInstance();
+        loadDataFromFirebase();
+        final String[] tempsize = new String[1];
+
+
+
+
+        List<Item> items = new ArrayList<>();
+        Item[] item = new Item[ITEM_SIZE];
+        item[0] = new Item(R.drawable.a, "CAFE 24");
+        item[1] = new Item(R.drawable.b, "Panda Coffee");
+        item[2] = new Item(R.drawable.c, "그래 써니");
+        item[3] = new Item(R.drawable.d, "LOWSIDE COFFEE");
+        item[4] = new Item(R.drawable.e, "Destiny");
+
+        for (int i = 0; i < ITEM_SIZE; i++) {
+            items.add(item[i]);
+        }
+
+        //recyclerView.setAdapter(new RecyclerAdapter(getApplicationContext(), items, R.layout.activity_main));
+
+
+        //////////////////////////////////////////////////////
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab_qr);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, QRActivity.class);
+                startActivity(intent);
+            }
+        });
+    }
+    String cafeName = ((QRActivity)QRActivity.context_main).cafeName;
+    private void loadDataFromFirebase(){
+        userLogPath.collection(cafeName)
+                .get().addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+            @Override
+            public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                for(DocumentSnapshot querySnapshot : task.getResult()){
+                    cafeCode = querySnapshot.getString("cafeCode");
+                }
+            }
+        });
+        storage.collection("CafeInfo").document(cafeCode)
+                .get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+            @Override
+            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                if (task.isSuccessful()) {
+                    DocumentSnapshot document = task.getResult();
+                    if (document.exists()) {
+                        //tempsize[0] = document.get("useCafeNum").toString();
+                    }
+                    //ITEM_SIZE = Integer.parseInt(tempsize[0]);
+                }
+            }
+        });
+    }
+
+    private void setUpRecyclerView(){
+        RecyclerView recyclerView = (RecyclerView) findViewById(R.id.recyclerview);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(getApplicationContext());
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(layoutManager);
+
+    }
+}
+///////////////////////////////////////////////////////
+package com.yooncafe.cafe;
+
+import android.content.Context;
+import android.content.Intent;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.util.Log;
+
+import android.widget.Toast;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.SetOptions;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+
+public class QRActivity extends AppCompatActivity {
+    private FirebaseAuth firebaseAuth;
+    private IntentIntegrator qrScan;
+    private AlertDialog dialog;
+    public static Context context_main;
+    public String cafeName;
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        firebaseAuth = FirebaseAuth.getInstance();
+        context_main = this;
+        qrScan = new IntentIntegrator(this);
+        qrScan.setOrientationLocked(false); // default가 세로모드인데 휴대폰 방향에 따라 가로, 세로로 자동 변경됩니다.
+        qrScan.setPrompt("Sample Text!");
+        qrScan.initiateScan();
+    }
+
+    //시간 get
+    long now = System.currentTimeMillis();
+    Date mDate = new Date(now);
+    SimpleDateFormat simpleDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+    String getTime = simpleDate.format(mDate);
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if(result != null) {
+            if(result.getContents() == null) {
+                Toast.makeText(this, "Cancelled", Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                startActivity(intent);
+            } else {
+                String result_text = result.getContents();
+                if(result_text.contains("yooncafeyooncafe3x3x3x3x3")) {//yooncafeyooncafe3x3x3x3x3-456456-cafename(코드 형식)
+                    Toast.makeText(this, "Scanned: " + result.getContents(), Toast.LENGTH_LONG).show();
+                    cafeName = result_text.substring(33);
+                    final String[] cafeCode = {result_text.substring(26, 32)};
+                    final String userLog = getTime;
+
+                    FirebaseUser user = firebaseAuth.getCurrentUser();
+                    final String uid = user.getUid();
+                    final FirebaseFirestore storage = FirebaseFirestore.getInstance();
+
+                    final HashMap<Object, Object> nestedmap = new HashMap<>();
+                    nestedmap.put("cafeName",cafeName);
+                    nestedmap.put("cafeCode", cafeCode[0]);
+                    nestedmap.put("useNum",1);
+                    nestedmap.put("Log 1",userLog);
+
+                    final HashMap<Object, Object> nestedmap2 = new HashMap<>();
+                    nestedmap2.put(cafeCode[0],nestedmap);
+
+                    final DocumentReference userLogPath = storage.collection("Users").document(uid)
+                            .collection(cafeName).document(cafeCode[0]);
+                    final boolean[] defaultCol = {false};
+                    storage.collection("Users")
+                            .whereEqualTo(cafeCode[0],null)
+                            .get()
+                            .addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+                             @Override
+                            public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                                if (task.isSuccessful()) {
+                                    defaultCol[0] = true;
+                                } else {
+                                    defaultCol[0] = false;
+                                    storage.collection("Users").document(uid).set(nestedmap);
+                                    Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                                    startActivity(intent);
+                                    finish();
+                                    Log.d("d", "Error getting documents: ", task.getException());
+                                }
+                            }
+                    });
+                    final int[] SaveduserNum = new int[1];
+                    final String[] temp = new String[1];
+                    storage.collection("Users")
+                            .get().addOnCompleteListener(new OnCompleteListener<QuerySnapshot>() {
+                        @Override
+                        public void onComplete(@NonNull Task<QuerySnapshot> task) {
+                            if(defaultCol[0]) {
+                                for (DocumentSnapshot querySnapshot : task.getResult()) {
+                                    temp[0] = querySnapshot.getString(cafeCode[0] + ".useNum");
+                                }
+                                if (!TextUtils.isEmpty(temp[0]) && TextUtils.isDigitsOnly(temp[0])) {
+                                    SaveduserNum[0] = Integer.parseInt(temp[0]);
+                                    SaveduserNum[0] = SaveduserNum[0] + 1;
+                                }
+                                final HashMap<Object, Object> map2 = new HashMap<>();
+                                map2.put("Log " + SaveduserNum[0], userLog);
+
+                                storage.collection("Users").document(uid).update(cafeCode[0]+ ".useNum", FieldValue.increment(1));
+                                storage.collection("Users").document(uid).set(map2,SetOptions.mergeFields(cafeCode[0]));
+                                Intent intent = new Intent(QRActivity.this, CouponActivity.class);
+                                startActivity(intent);
+                                finish();
+                            }
+                        }
+                    });
+                }
+                else{
+                    Toast.makeText(this, "유효하지 않은 QR 입니다.", Toast.LENGTH_LONG).show();
+                    Intent intent = new Intent(QRActivity.this, MainActivity.class);
+                    startActivity(intent);
+                }
+            }
+        } else {
+            super.onActivityResult(requestCode, resultCode, data);
+        }
+    }
+}
+////////////////////////////////////////////////////////
+package com.yooncafe.cafe;
+import android.content.Intent;
+
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
+
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import android.os.Bundle;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import android.util.Log;
+import android.view.View;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+public class MainActivity extends AppCompatActivity {
+    private FirebaseAuth firebaseAuth =  FirebaseAuth.getInstance();
+    FirebaseFirestore storage;
+    RecyclerView recyclerView;
+    FirebaseUser user = firebaseAuth.getCurrentUser();
+    final String uid = user.getUid();
+    int ITEM_SIZE;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        recyclerView = (RecyclerView) findViewById(R.id.recyclerview);
+        LinearLayoutManager layoutManager = new LinearLayoutManager(getApplicationContext());
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setLayoutManager(layoutManager);
+
+        storage = FirebaseFirestore.getInstance();
+
+        final List<String> CafeCodes = new ArrayList<>();
+        final String[] tempsize = new String[1];
+        storage.collection("Users").document(uid).get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+            @Override
+            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                if (task.isSuccessful()) {
+                    DocumentSnapshot document = task.getResult();
+                    if (document.exists()) {
+                        Log.d("d",String.valueOf(document.get("useCafeNum")));
+
+                        if(document.get("useCafeNum")==null){
+                            tempsize[0] = "0";
+                        }else {
+                            tempsize[0] = Objects.requireNonNull(document.get("useCafeNum")).toString();
+                        }
+                    }
+                    ITEM_SIZE = Integer.parseInt(tempsize[0]);
+                }
+            }
+        });
+        final List<Item> items = new ArrayList<>();
+        storage.collection("Users").document(uid).get().addOnCompleteListener(new OnCompleteListener<DocumentSnapshot>() {
+            @Override
+            public void onComplete(@NonNull Task<DocumentSnapshot> task) {
+                if (task.isSuccessful()) {
+                    List<String> list = new ArrayList<>();
+                    Map<String, Object> map = task.getResult().getData();
+                    for (Map.Entry<String, Object> entry : map.entrySet()) {
+                        list.add(entry.getKey());
+                    }
+                    Collections.sort(list);
+                    for (int i = 0; i < ITEM_SIZE; i++) {
+                        CafeCodes.add(list.get(i));
+                        Log.d("d",list.get(i));
+                    }
+                    for (int i = 0; i < ITEM_SIZE; i++) {
+                        Item item = new Item(R.drawable.intro_logo, CafeCodes.get(i));
+                        items.add(item);
+                        Log.d("d","cnrkcnkrnckrncknkncknrknknrknknrknrknrk");
+                    }
+                }
+            }
+        });
+        Log.d("d","4545455644444444444444444444444444444444444444444");
+        recyclerView.setAdapter(new RecyclerAdapter(getApplicationContext(), items, R.layout.activity_main));
+        //////////////////////////////////////////////////////
+        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab_qr);
+        fab.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, QRActivity.class);
+                startActivity(intent);
+            }
+        });
+    }
+}
